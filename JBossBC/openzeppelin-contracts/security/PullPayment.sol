@@ -1,6 +1,6 @@
 pragma solidity ^0.8.0;
 
-
+import "./utils/Escrow.sol";
 abstract contract PullPayment{
     Escrow private immutable _escrow;
     constructor(){
@@ -13,6 +13,6 @@ abstract contract PullPayment{
         return _escrow.depositsOf(dest);
     }
     function _asynTransfer(address dest,uint256 amount)internal virtual{
-        _escrow.deposit(value: amount)(dest);
+        _escrow.deposit{value: amount}(dest);
     }
 }
