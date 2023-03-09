@@ -1,6 +1,7 @@
 
 pragma solidity ^0.8.0;
-
+import "../../interfaces/draft-IERC1822.sol";
+import "../ERC1967/ERC1967Upgrade.sol";
 abstract contract UUPSUpgradeable is IERC1822Proxiable,ERC1967Upgrade{
     address private immutable __self =address(this);
     modifier onlyProxy(){
