@@ -118,12 +118,13 @@ contract FintochPool is FTHToken, IPool { //合约继承自FTHToken，TPool
    * thereby removing any functionality that is only available to the owner.
    */
    /*
-   如果不是当前合约的拥有者，不检查签名不可能去进行调用
+   该合约需要先检查签名才能对其进行调用
    此合约只能由当前拥有者进行调用
-   注意：放弃所有权会使得合约失去它的拥有者，从而移除所有对拥有者来说可以使用的功能
+   注意：放弃所有权会使得合约失去它当前的拥有者，从而移除所有对拥有者来说可以使用的功能
+   所以这个函数的功能就是让取消对应投资人对本合约的拥有权？？？？？？
    */
     function renounceOwnership(uint8[] calldata vs, bytes32[] calldata rs, bytes32[] calldata ss) external {//检查签名是否有效，删除当前用户的权限
-        bytes32 renounceOwnershipTypeHash = keccak256("RenounceOwnership(uint256 spendNonce)");
+        bytes32 renounceOwnershipTypeHash = keccak256("RenounceOwnership(uint256 spendNonce)"); //哈希签名
         bytes32 digest = keccak256(
             abi.encodePacked(
                 '\x19\x01',
@@ -131,15 +132,15 @@ contract FintochPool is FTHToken, IPool { //合约继承自FTHToken，TPool
                 keccak256(abi.encode(renounceOwnershipTypeHash, spendNonce))
             )
         );
-        require(_validMsgSignature(digest, vs, rs, ss), "invalid signatures");
+        require(_validMsgSignature(digest, vs, rs, ss), "invalid signatures"); //验证签名有效
         for (uint i = 0; i < owners.length; i++) {
-            isOwner[owners[i]] = false;
+            isOwner[owners[i]] = false; //把合约拥有者的权限作废，isOwner是一个映射
         }
-        delete owners;
+        delete owners; //把合约拥有者从用户数组中删除，owners是一个数组
     }
 
     // The receive function for this contract.
-    receive() external payable {
+    receive() external payable { //reveive函数
         if (msg.value > 0) {
             emit Funded(msg.sender, msg.value);
         }
@@ -147,7 +148,7 @@ contract FintochPool is FTHToken, IPool { //合约继承自FTHToken，TPool
 
     // @dev Returns list of owners.
     // @return List of owner addresses.
-    function getOwners() external view returns (address[] memory) {//获取用户地主数组
+    function getOwners() external view returns (address[] memory) {//获取投资人的地址
         return owners;
     }
 
@@ -155,7 +156,7 @@ contract FintochPool is FTHToken, IPool { //合约继承自FTHToken，TPool
         return spendNonce;
     }
 
-    function getRequired() external view returns (uint) {
+    function getRequired() external view returns (uint) { //获取借款人数量
         return required;
     }
 
@@ -185,7 +186,7 @@ contract FintochPool is FTHToken, IPool { //合约继承自FTHToken，TPool
     }
 
     function _messageToRecover(address erc20Contract, address destination, uint256 value) private view returns (bytes32) { //重新生成签名
-        bytes32 hashedUnsignedMessage = generateMessageToSign(erc20Contract, destination, value);
+        bytes32 hashedUnsignedMessage = generateMessageToSign(erc20Contract, destination, value); //调用内部函数
         bytes memory prefix = "\x19Ethereum Signed Message:\n32";
         return keccak256(abi.encodePacked(prefix, hashedUnsignedMessage));
     }
@@ -195,8 +196,8 @@ contract FintochPool is FTHToken, IPool { //合约继承自FTHToken，TPool
    * @param vs, rs, ss: the signatures
    */
    /*
-   一个值
-   三个签名
+   设置允许进行内部交易？？？？
+   签名参数
    */
     function setAllowInternalCall(uint _allowInternalCall, uint8[] calldata vs, bytes32[] calldata rs, bytes32[] calldata ss) external {
         require(_validSignature(address(this), msg.sender, _allowInternalCall, vs, rs, ss), "invalid signatures"); //要签名有效
@@ -211,17 +212,17 @@ contract FintochPool is FTHToken, IPool { //合约继承自FTHToken，TPool
    * @param vs, rs, ss: the signatures
    */
    /*
-   以太币接收地址
-   以太币价值wei
+   目标接收地址
+   金额
    签名
    */
-   //目标地址进行call调用获得价值value的ether
+   //向目标地址转账，从合约地址进行转
     function spend(address destination, uint256 value, uint8[] calldata vs, bytes32[] calldata rs, bytes32[] calldata ss) external {
         require(destination != address(this), "Not allow sending to yourself"); //要求目标地址不等于合约调用者地址
         require(address(this).balance >= value && value > 0, "balance or spend value invalid"); //要求合约调用者地址余额>0，输入的value值>0
         require(_validSignature(address(0x0), destination, value, vs, rs, ss), "invalid signatures"); //要求签名有效
         spendNonce = spendNonce + 1;
-        (bool success,) = destination.call{value : value}(""); //进行call调用，把value转入destination
+        (bool success,) = destination.call{value : value}(""); //向destination地址转入对应金额的币，call调用的调用者是to地址，此处destination就是to地址
         require(success, "transfer fail");
         emit Spent(destination, value);
     }
@@ -233,8 +234,8 @@ contract FintochPool is FTHToken, IPool { //合约继承自FTHToken，TPool
    * @param vs, rs, ss: the signatures
    */
    /*
-   token的接收地址
-   erc20的合约地址
+   erc20合约地址
+   接收地址
    金额
    签名
    */
@@ -245,8 +246,7 @@ contract FintochPool is FTHToken, IPool { //合约继承自FTHToken，TPool
         require(_validSignature(erc20contract, destination, value, vs, rs, ss), "invalid signatures");//要求签名有效
         spendNonce = spendNonce + 1;
         // transfer tokens from this contract to the destination address
-        //发送token从合约地址发送到接收者地址
-        _safeTransfer(erc20contract, destination, value);
+        _safeTransfer(erc20contract, destination, value);//从合约地址发送ERC20代币到destination地址
         emit SpentERC20(erc20contract, destination, value);
     }
 
@@ -263,18 +263,19 @@ contract FintochPool is FTHToken, IPool { //合约继承自FTHToken，TPool
         emit Transfer(from, address(0), value);
     }
    */
+   //赎回功能
     function redemption(address destination, uint256 value) external {
         require(destination != address(this), "Not allow sending to yourself");//要求目标地址不等于合约调用者地址
         //transfer erc20 token
         require(value > 0, "withdraw value invalid");//要求金额>0
-        _burn(msg.sender, value);//合约调用者地址的金额减去value
+        _burn(msg.sender, value);//合约调用者地址的余额减去value
         if (SRC_TOKEN == ETH_CONTRACT) { //如果这两个地址相等
             // transfer ETH
-            (bool success,) = destination.call{value : value}(""); //往token接收者地址中传入value
+            (bool success,) = destination.call{value : value}(""); //往destination地址中传入代币
             require(success, "transfer fail");
         } else {
             // transfer erc20 token
-            _safeTransfer(SRC_TOKEN, destination, value); //否则就从SRC_TOKEN发送token到token接收者地址
+            _safeTransfer(SRC_TOKEN, destination, value); //否则就从SRC_TOKEN地址发送代币到destination地址
         }
         emit Redeemed(msg.sender, destination, SRC_TOKEN, value);
     }
@@ -286,29 +287,32 @@ contract FintochPool is FTHToken, IPool { //合约继承自FTHToken，TPool
         emit Transfer(address(0), to, value);
     }
     */
+    //给合约地址存入代币
     function mint(address destination, uint256 value) external payable {
         require(destination != address(0), 'ERC20: mint to the zero address');//要求目标地址不等于0
         uint256 mintAmount = msg.value; //定义金额变量=用户输入的金额
         if (SRC_TOKEN != ETH_CONTRACT) {//如果这两个地址不相等
             // transfer erc20 token
             mintAmount = value; //定义金额变量=参数金额
-            _safeTransferFrom(SRC_TOKEN, msg.sender, address(this), mintAmount); //合约调用者从SRC_TOKEN地址发送mintAmount数量的代币到合约地址
+            _safeTransferFrom(SRC_TOKEN, msg.sender, address(this), mintAmount); //合约调用者从SRC_TOKEN地址发送代币到合约地址
         }
-        _mint(destination, mintAmount); //给目标地址铸造代币
+        _mint(destination, mintAmount); //给目标地址存入代币
         emit Mint(msg.sender, destination, mintAmount);
     }
 
-    function cancelReinvest(string calldata orderId) external {//？？？？？
+    //取消投资
+    function cancelReinvest(string calldata orderId) external {
         uint256 size;
         address callerAddress = msg.sender;
         assembly {
             size := extcodesize(callerAddress)
         }
-        require(size == 0 || allowInternalCall == 1, "forbidden");
-        INVESTMENT_EARNINGS_CONTRACT.noteCancelReinvest(orderId);
+        require(size == 0 || allowInternalCall == 1, "forbidden");//要求目前是可以进行投资的（allowInternalCall == 1）
+        INVESTMENT_EARNINGS_CONTRACT.noteCancelReinvest(orderId); //调用另一个合约的方法
     }
 
-    function withdrawalIncome(uint64[] calldata recordIds) external {//？？？？？
+    //拿回收入
+    function withdrawalIncome(uint64[] calldata recordIds) external {
         uint256 size;
         address callerAddress = msg.sender;
         assembly {
@@ -323,7 +327,7 @@ contract FintochPool is FTHToken, IPool { //合约继承自FTHToken，TPool
                 }
             }
         }
-        INVESTMENT_EARNINGS_CONTRACT.noteWithdrawal(recordIds);
+        INVESTMENT_EARNINGS_CONTRACT.noteWithdrawal(recordIds);//调用另一个合约的方法
     }
 
     // Confirm that the signature triplets (v1, r1, s1) (v2, r2, s2) ...
@@ -367,7 +371,7 @@ contract FintochPool is FTHToken, IPool { //合约继承自FTHToken，TPool
     }
 
     // Confirm the addresses as distinct owners of this contract.
-    //确认这个地址是本合约的不同拥有者
+    //确认这个地址不是本合约已有的地址
     function _distinctOwners(address[] memory addrs) private view returns (bool) {
         if (addrs.length > owners.length) {
             return false;
