@@ -21,7 +21,11 @@ batchTransfer 函数，它用于给地址列表中的所有地址都转账 _valu
 但是总共的 amount 却接近0.
 所以要引入:library SafeMath {} 来规避掉溢出问题.
 
-**重入攻击**
+**重入攻击(递归调用攻击)**
+transfer与send的区别
+如果转账过程中出现问题，transfer会直接回退，所有之前的操作全部作废。
+而send则不会回退交易，而是返回一个结果值true或false，至于回不回退，由调用者自己决定。
+所以transfer就等于require(send),call函数则与send基本相同，只是gas费你可以自由指定。
 ```solidity
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
@@ -162,6 +166,11 @@ attack，这个合约中先预测结果，再决定是否调用其它函数。�
 由于这个合约没有fallback和receive函数，所以不会接受外部发来的以太。若黑客绕开deposit函数充入以太，则游戏便无法
 进行了，不会再产生赢家。而如何绕开deposit函数呢？就是利用selfdestruct函数向攻击目标合约强制转账，黑客先在攻击合约中
 存满7个以太，然后执行自会函数。那么七个以太就会强制转账给目标合约了。以太坊留有后门，可以通过自会函数强制转账，即使被
-攻击的合约没有fallback或receive函数。           
+攻击的合约没有fallback或receive函数。
+
+**访问控制漏洞**
+
+
+
 
 
